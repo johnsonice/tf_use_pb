@@ -10,7 +10,10 @@ import tensorflow as tf
 import json
 import cv2
 from postprocess import postprocess
-
+import numpy as np
+from box import BoundBox, box_iou, prob_compare
+import matplotlib.pyplot as plt
+%matplotlib inline
 #%%
 ## preprocess function 
 def preprocess(im,meta):
@@ -20,6 +23,13 @@ def preprocess(im,meta):
     imsz = imsz[:,:,::-1]
     return imsz
 
+def expit(x):
+    return 1./(1. + np.exp(-x))
+
+def _softmax(x):
+    e_x = np.exp(x - np.max(x))
+    out = e_x / e_x.sum()
+    return out
 #%%
 ## read tf model from pb 
 tf.reset_default_graph()
@@ -53,10 +63,22 @@ net_out = sess.run(out, feed_dict)
 ############################################################
 # waiting to be finished
 meta['thresh'] = 0.3
-result,boxes = postprocess(net_out,meta,pic)
 
-###########
+#%%
+H,W,_ = meta['out_size']
+threshold = meta['thresh']
+C,B = meta['classes'], meta['num']  ## number of classes(80 for yolo), number of boxes (5 for yolov2)
+anchors = meta['anchors']
+net_out = net_out.reshape([H,W,B,-1]) ## reshape to 19,19,5,?
 
+#%%
+
+
+
+
+#%%
+#######################################################################
+result = postprocess(net_out,meta,pic)
 
 #%%
 cv2.imshow('result',result)
