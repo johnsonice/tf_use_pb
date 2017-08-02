@@ -32,7 +32,7 @@ def _softmax(x):
     out = e_x / e_x.sum()
     return out
 
-def postprocess_json(net_out,meta,h,w):
+def finxboxes(net_out,meta,h,w):
     H,W,_ = meta['out_size']
     threshold = meta['thresh']
     C,B = meta['classes'], meta['num']  ## number of classes(80 for yolo), number of boxes (5 for yolov2)
@@ -144,12 +144,28 @@ net_out = sess.run(out, feed_dict)
 
 meta['thresh'] = 0.3  ## set threshold 
 h,w,_ = pic.shape     ## get original pic shape 
-boxes = postprocess_json(net_out,meta,h,w)    # return list of box dict 
+boxes = finxboxes(net_out,meta,h,w)    # return list of box dict 
 print(boxes)
 # draw image
 return_img = draw(pic,meta,boxes)
 plt.imshow(return_img)
 
+#%%
+## spped test 
+import timeit
+
+def predict():
+    pic = cv2.imread(img)
+    x = preprocess(pic,meta)
+    feed_dict = {inp: [x]}
+    net_out = sess.run(out, feed_dict)
+    
+    meta['thresh'] = 0.3  ## set threshold 
+    h,w,_ = pic.shape     ## get original pic shape 
+    boxes = postprocess_json(net_out,meta,h,w) 
+    return boxes
+
+timeit.timeit(predict,number=100)  ## run 100 pictures 
 
 
 
