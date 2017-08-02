@@ -38,14 +38,14 @@ def postprocess_json(net_out,meta,h,w):
     C,B = meta['classes'], meta['num']  ## number of classes(80 for yolo), number of boxes (5 for yolov2)
     anchors = meta['anchors']
     labels = meta['labels']
-    net_out_reshape = net_out.reshape([H,W,B,-1])   ## reshape to 19,19,5,85 , 19X19 grade with 5 boxes for each grid, 
+    net_out = net_out.reshape([H,W,B,-1])   ## reshape to 19,19,5,85 , 19X19 grade with 5 boxes for each grid, 
                                                     ## 85 premeters for each box
     boxes = list()
     for row in range(H):  # H = 19
         for col in range(W):  #W = 19
             for b in range(B):  # B = 5
                 bx = BoundBox(C)  # a box instance with C=80 classes 
-                bx.x,bx.y,bx.w,bx.h,bx.c = net_out_reshape[row,col,b,:5]  # assign first 5 as x,y,w,h,c
+                bx.x,bx.y,bx.w,bx.h,bx.c = net_out[row,col,b,:5]  # assign first 5 as x,y,w,h,c
                 bx.c = expit(bx.c)  # use logit, bounded between 0 and 1 
                 bx.x = (col + expit(bx.x)) / W   # get the relative x position, between(0,1) 
                 bx.y = (row + expit(bx.y)) / H   # get the relative y position, between(0,1) 
@@ -93,6 +93,26 @@ def postprocess_json(net_out,meta,h,w):
 
     return boxes_out
 
+def draw(pic,meta,boxes):
+    pic = np.copy(pic)
+    colors = meta['colors']
+    labels = meta['labels']
+    h,w,_ = pic.shape
+    thick = int((h+w)/300)
+    if boxes is None: return pic
+    for b in boxes:
+        x1 = b['topleft']['x']
+        y1 = b['topleft']['y']
+        x2 = b['bottomright']['x']
+        y2 = b['bottomright']['y']
+        label = b['label']
+        max_index = labels.index(label)
+        cv2.rectangle(pic,(x1,y1),(x2,y2),colors[max_index],thick)
+        mess = '{}'.format(label)
+        cv2.putText(pic,mess,(x1,y1-12),0, 1e-3 * h, colors[max_index],thick//3)
+
+    return pic 
+
 #%%
 ## read tf model from pb 
 tf.reset_default_graph()
@@ -126,11 +146,9 @@ meta['thresh'] = 0.3  ## set threshold
 h,w,_ = pic.shape     ## get original pic shape 
 boxes = postprocess_json(net_out,meta,h,w)    # return list of box dict 
 print(boxes)
-
-
-
-
-
+# draw image
+return_img = draw(pic,meta,boxes)
+plt.imshow(return_img)
 
 
 
