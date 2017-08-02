@@ -9,10 +9,11 @@ Created on Thu Jul 20 22:30:31 2017
 import tensorflow as tf 
 import json
 import cv2
-from postprocess import postprocess
+#from postprocess import postprocess
 import numpy as np
 from box import BoundBox, box_iou, prob_compare
 import matplotlib.pyplot as plt
+import math 
 %matplotlib inline
 #%%
 ## preprocess function 
@@ -30,6 +31,68 @@ def _softmax(x):
     e_x = np.exp(x - np.max(x))
     out = e_x / e_x.sum()
     return out
+
+def postprocess_json(net_out,meta,h,w):
+    H,W,_ = meta['out_size']
+    threshold = meta['thresh']
+    C,B = meta['classes'], meta['num']  ## number of classes(80 for yolo), number of boxes (5 for yolov2)
+    anchors = meta['anchors']
+    labels = meta['labels']
+    net_out_reshape = net_out.reshape([H,W,B,-1])   ## reshape to 19,19,5,85 , 19X19 grade with 5 boxes for each grid, 
+                                                    ## 85 premeters for each box
+    boxes = list()
+    for row in range(H):  # H = 19
+        for col in range(W):  #W = 19
+            for b in range(B):  # B = 5
+                bx = BoundBox(C)  # a box instance with C=80 classes 
+                bx.x,bx.y,bx.w,bx.h,bx.c = net_out_reshape[row,col,b,:5]  # assign first 5 as x,y,w,h,c
+                bx.c = expit(bx.c)  # use logit, bounded between 0 and 1 
+                bx.x = (col + expit(bx.x)) / W   # get the relative x position, between(0,1) 
+                bx.y = (row + expit(bx.y)) / H   # get the relative y position, between(0,1) 
+                bx.w = math.exp(bx.w) * anchors[2 * b + 0] / W    #?
+                bx.h = math.exp(bx.h) * anchors[2 * b + 1] / H    #?
+                classes = net_out_reshape[row,col,b,5:]
+                bx.probs = _softmax(classes)*bx.c
+                bx.probs *= bx.probs>threshold  # prob = prob if > threshod, otherwise 0 
+                if sum(bx.probs)>0:             # i added this part, make it faster for inference , not good for training 
+                    boxes.append(bx)
+    
+    # non max suppress boxes, delete overlapping boxes 
+    for c in range(C):
+        for i in range(len(boxes)):
+            boxes[i].class_num = c 
+        boxes = sorted(boxes,key=prob_compare)  # sort by higest class probability 
+        for i in range(len(boxes)):
+            boxi = boxes[i]
+            if boxi.probs[c] == 0. :continue
+            for j in range(i+1,len(boxes)):
+                boxj = boxes[j]
+                if box_iou(boxi,boxj)>=0.4:
+                    boxes[j].probs[c] = 0.
+    
+    boxes = [box for box in boxes if sum(box.probs) > 0.]  ## i added this part, make it faster for inference , not good for training, get ride of all 0 probs boxes 
+    if len(boxes)==0:
+        return None
+    
+    boxes_out = list()
+    for b in boxes:
+        max_index = np.argmax(b.probs)
+        max_prob = b.probs[max_index]
+        label = 'object' * int(C < 2) 
+        label += labels[max_index] * int(C>1) 
+        left = int((b.x-b.w/2.)*w)
+        right = int ((b.x + b.w/2.) * w)
+        top   = int ((b.y - b.h/2.) * h)
+        bot   = int ((b.y + b.h/2.) * h)
+        if left  < 0    :  left = 0
+        if right > w - 1: right = w - 1
+        if top   < 0    :   top = 0
+        if bot   > h - 1:   bot = h - 1
+        bo = {'label':label,'confidence':b.c,"topleft": {"x": left, "y": top}, "bottomright": {"x": right, "y": bot}}
+        boxes_out.append(bo)
+
+    return boxes_out
+
 #%%
 ## read tf model from pb 
 tf.reset_default_graph()
@@ -54,40 +117,26 @@ out = tf.get_default_graph().get_tensor_by_name('output:0')
 
 #%%
 ## use model and input, output node for inference 
-pic = cv2.imread(img,1)
+pic = cv2.imread(img)
 x = preprocess(pic,meta)
 feed_dict = {inp: [x]}
 net_out = sess.run(out, feed_dict)
 
-
-############################################################
-# waiting to be finished
-meta['thresh'] = 0.3
-
-#%%
-H,W,_ = meta['out_size']
-threshold = meta['thresh']
-C,B = meta['classes'], meta['num']  ## number of classes(80 for yolo), number of boxes (5 for yolov2)
-anchors = meta['anchors']
-net_out = net_out.reshape([H,W,B,-1]) ## reshape to 19,19,5,?
-
-#%%
+meta['thresh'] = 0.3  ## set threshold 
+h,w,_ = pic.shape     ## get original pic shape 
+boxes = postprocess_json(net_out,meta,h,w)    # return list of box dict 
+print(boxes)
 
 
 
 
-#%%
-#######################################################################
-result = postprocess(net_out,meta,pic)
-
-#%%
-cv2.imshow('result',result)
-cv2.waitKey(0)
-cv2.destroyAllWindows()
-        
-#%%
 
 
+
+
+
+# result = postprocess(net_out,meta,pic)
+# plt.imshow(result)  ## BGR
 ## talke a look at node names ------------ this is not revelent 
-graph = tf.get_default_graph()
-node_names = [n.name for n in graph.as_graph_def().node]
+# graph = tf.get_default_graph()
+# node_names = [n.name for n in graph.as_graph_def().node]
