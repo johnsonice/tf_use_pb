@@ -51,7 +51,7 @@ def finxboxes(net_out,meta,h,w):
                 bx.y = (row + expit(bx.y)) / H   # get the relative y position, between(0,1) 
                 bx.w = math.exp(bx.w) * anchors[2 * b + 0] / W    #?
                 bx.h = math.exp(bx.h) * anchors[2 * b + 1] / H    #?
-                classes = net_out_reshape[row,col,b,5:]
+                classes = net_out[row,col,b,5:]
                 bx.probs = _softmax(classes)*bx.c
                 bx.probs *= bx.probs>threshold  # prob = prob if > threshod, otherwise 0 
                 if sum(bx.probs)>0:             # i added this part, make it faster for inference , not good for training 
@@ -117,8 +117,8 @@ def draw(pic,meta,boxes):
 ## read tf model from pb 
 tf.reset_default_graph()
 
-pb_file = 'yolo.pb'
-pb_meta = 'yolo.meta'
+pb_file = 'tiny-yolo.pb'
+pb_meta = 'tiny-yolo.meta'
 img = 'sample_dog.jpg'
 
 with tf.gfile.FastGFile(pb_file, "rb") as f:
@@ -162,10 +162,10 @@ def predict():
     
     meta['thresh'] = 0.3  ## set threshold 
     h,w,_ = pic.shape     ## get original pic shape 
-    boxes = postprocess_json(net_out,meta,h,w) 
+    boxes = finxboxes(net_out,meta,h,w) 
     return boxes
 
-timeit.timeit(predict,number=100)  ## run 100 pictures 
+timeit.timeit(predict,number=10)  ## run 100 pictures 
 
 
 
