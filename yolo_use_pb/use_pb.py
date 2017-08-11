@@ -117,8 +117,8 @@ def draw(pic,meta,boxes):
 ## read tf model from pb 
 tf.reset_default_graph()
 
-pb_file = 'tiny-yolo.pb'
-pb_meta = 'tiny-yolo.meta'
+pb_file = 'yolo.pb'
+pb_meta = 'yolo.meta'
 img = 'sample_dog.jpg'
 
 with tf.gfile.FastGFile(pb_file, "rb") as f:
